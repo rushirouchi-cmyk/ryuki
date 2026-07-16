@@ -23,6 +23,7 @@
   - JD / スカウトテンプレートの保管・検索
   - KPI 集計クエリ
 - **プロンプト集** (`prompts/`): 各業務タスク用のシステムプロンプト・Few-shot 例を集めたテンプレート集。
+- **自動スカウト** (`scout/`): オープンワークリクルーティングで保存済み検索条件の候補者へ毎朝 7:00 (JST) に自動スカウトを送る Playwright スクリプト。詳細は [scout/README.md](scout/README.md)。
 - **既存 MCP サーバー活用**: Gmail / Google Calendar / Google Drive / tldv / GitHub は既存 MCP を利用する。
 
 ## ドキュメント
