@@ -35,6 +35,7 @@
 | [docs/mcp-tools.md](docs/mcp-tools.md) | 自作 MCP サーバーが提供するツール仕様 |
 | [docs/data-model.md](docs/data-model.md) | 求人・候補者・選考プロセスのデータモデル |
 | [docs/prompts.md](docs/prompts.md) | プロンプト設計方針とテンプレート一覧 |
+| [docs/tldv-minutes-automation.md](docs/tldv-minutes-automation.md) | tl;dv 議事録の自動生成・スプレッドシート格納フロー (稼働中) |
 | [docs/roadmap.md](docs/roadmap.md) | フェーズ別の実装ロードマップ |
 
 ## ステータス
