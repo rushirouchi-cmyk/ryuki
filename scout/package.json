@@ -1,0 +1,11 @@
+{
+  "name": "openwork-auto-scout",
+  "version": "0.1.0",
+  "private": true,
+  "description": "オープンワークリクルーティングで保存済み検索条件の候補者へ毎日自動スカウトを送るスクリプト",
+  "scripts": {
+    "scout": "NODE_PATH=/opt/node22/lib/node_modules node openwork-scout.js",
+    "scout:dry": "DRY_RUN=1 NODE_PATH=/opt/node22/lib/node_modules node openwork-scout.js"
+  },
+  "notes": "playwright はグローバルインストール (/opt/node22/lib/node_modules) を NODE_PATH 経由で利用する。Claude Code リモート環境では npm registry へのアクセスが制限されているため、ローカル node_modules は持たない。"
+}
