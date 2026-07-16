@@ -58,6 +58,16 @@ Claude Code Remote の Routine が毎日 22:00 UTC (= 7:00 JST) に新規セッ�
 
 ## ⚠️ 前提: ネットワーク許可
 
+環境の許可ドメインには以下の **2つ** が必要:
+
+```
+recruiting.vorkers.com
+assets.openwork.jp
+```
+
+`assets.openwork.jp` は画面描画用のJavaScript配信元。許可されていないと画面が描画されず
+「画面の読み込みに問題が発生しています」で止まる。
+
 Claude Code リモート環境のネットワークポリシーで **`recruiting.vorkers.com` への
 アクセスを許可する必要がある**。許可されていない場合、プロキシが 403 を返し
 ログインページに到達できない。claude.ai の環境設定 (Environment settings → Network

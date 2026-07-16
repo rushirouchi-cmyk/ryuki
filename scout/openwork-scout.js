@@ -4,11 +4,23 @@
  *
  * フロー:
  *   1. https://recruiting.vorkers.com/login にログイン
- *   2. 「スカウト」を選択
- *   3. 「保存した検索条件」を選択
- *   4. 検索条件 (SEARCH_CONDITION_NAME) を選択
- *   5. 候補者ごとに: 名前をクリック → 「スカウトを送る」→ テンプレート選択 → 送付
- *   6. 100件を超える場合は「次へ」でページ送り
+ *   2. 保存した検索条件「旭化成ホームズ【東京／神奈川】集合住宅営業」(id=269013) の候補者一覧を開く
+ *   3. 候補者ごとに: 詳細を開く → 「スカウトを送る」→ テンプレート
+ *      「旭化成ホームズ【東京】集合住宅営業（未経験）」を選択 → 送付
+ *   4. 100件を超える場合は「次へ」でページ送り
+ *
+ * == 実環境調査で確認済みの事実 (2026-07-16) ==
+ *   - ログインフォーム: #email / #password / button#log_in (POST /rec_login_check → 302 /)
+ *   - サイトのWAFはChromiumのTLSハンドシェイクをリセットするため、全HTTP通信は
+ *     Playwright APIRequestContext (Nodeスタック・環境の許可プロキシ経由) で行い、
+ *     ブラウザにはレンダリングのみさせる (context.route ですべて fulfill)。
+ *   - 画面はVue SPA。アプリJSは assets.openwork.jp 配信のため、環境の許可ドメインに
+ *     assets.openwork.jp が必要 (recruiting.vorkers.com だけでは画面が描画されない)。
+ *   - 保存した検索条件API: GET /scout/search_conditions/api/get
+ *     対象条件: id=269013「旭化成ホームズ【東京／神奈川】集合住宅営業」
+ *   - 候補者一覧URL: /scout/candidates?scout_search_condition_favorite_id=<id>
+ *   - スカウト送信などのAPI: /scout/api/send/scout, /scout/api/template ほか
+ *     (ペイロード形式は未確認。誤送信リスクがあるため直接APIは叩かず、UI経由で送る)
  *
  * 環境変数:
  *   OPENWORK_EMAIL / OPENWORK_PASSWORD ... ログイン情報 (必須)
@@ -16,7 +28,6 @@
  *   TEMPLATE_NAME         ... スカウトテンプレート名 (省略時は既定値)
  *   DRY_RUN=1             ... 最後の送付ボタンを押さずに動作確認する
  *   MAX_SCOUTS            ... 1回の実行で送る上限 (既定 300)
- *   HEADFUL=1             ... ブラウザを表示して実行 (デバッグ用)
  *
  * 出力:
  *   logs/run-<日時>/ ... 各ステップのスクリーンショットとエラー時のHTML
@@ -42,6 +53,7 @@ const { chromium } = requirePlaywright();
 // ---------------------------------------------------------------------------
 
 const CONFIG = {
+  baseUrl: 'https://recruiting.vorkers.com',
   loginUrl: 'https://recruiting.vorkers.com/login',
   email: process.env.OPENWORK_EMAIL,
   password: process.env.OPENWORK_PASSWORD,
@@ -51,44 +63,26 @@ const CONFIG = {
     process.env.TEMPLATE_NAME || '旭化成ホームズ【東京】集合住宅営業（未経験）',
   dryRun: process.env.DRY_RUN === '1',
   maxScouts: parseInt(process.env.MAX_SCOUTS || '300', 10),
-  headful: process.env.HEADFUL === '1',
-  stepTimeout: 20_000,
+  stepTimeout: 25_000,
 };
 
-// 画面要素のセレクタ / テキスト。サイトのUI変更時はここを直す。
-// テキストは正規表現で部分一致させ、多少の表記ゆれに耐えるようにしている。
+// 画面要素のテキスト。サイトのUI変更時はここを直す。
 const UI = {
-  loginEmail: [
-    'input[type="email"]',
-    'input[name*="mail" i]',
-    'input[name*="login" i]',
-    'input[id*="mail" i]',
-    'form input[type="text"]',
-  ],
-  loginPassword: ['input[type="password"]'],
-  loginSubmit: /ログイン/,
-  navScout: /^スカウト$|スカウト\s*$/,
-  savedSearch: /保存した検索条件/,
   sendScoutButton: /スカウトを送る/,
   alreadyScouted: /スカウト済み|送信済み/,
   templatePicker: /テンプレートから選択できます|テンプレートから選択/,
   finalSendButton: /スカウトの送付|スカウトを送付|送付する|送信する/,
   confirmButton: /^(OK|はい|送信|送付)$/,
-  nextPage: /^次へ|次のページ|next/i,
+  nextPage: /^次へ|次のページ/,
 };
 
 // ---------------------------------------------------------------------------
-// ユーティリティ
+// ログ・台帳
 // ---------------------------------------------------------------------------
 
-const RUN_ID = new Date()
-  .toISOString()
-  .replace(/[:T]/g, '-')
-  .slice(0, 19);
+const RUN_ID = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
 const LOG_DIR = path.join(__dirname, 'logs', `run-${RUN_ID}`);
 const LEDGER_PATH = path.join(__dirname, 'sent-candidates.json');
-
-fs.mkdirSync(LOG_DIR, { recursive: true });
 
 function log(msg) {
   console.log(`[${new Date().toISOString()}] ${msg}`);
@@ -96,26 +90,16 @@ function log(msg) {
 
 async function snap(page, name) {
   try {
-    await page.screenshot({
-      path: path.join(LOG_DIR, `${name}.png`),
-      fullPage: false,
-    });
-  } catch {
-    /* スクリーンショット失敗は無視 */
-  }
+    await page.screenshot({ path: path.join(LOG_DIR, `${name}.png`) });
+  } catch {}
 }
 
 async function dumpFailure(page, name, err) {
   log(`ERROR at ${name}: ${err.message}`);
   await snap(page, `FAIL-${name}`);
   try {
-    fs.writeFileSync(
-      path.join(LOG_DIR, `FAIL-${name}.html`),
-      await page.content()
-    );
-  } catch {
-    /* ignore */
-  }
+    fs.writeFileSync(path.join(LOG_DIR, `FAIL-${name}.html`), await page.content());
+  } catch {}
 }
 
 function loadLedger() {
@@ -130,16 +114,114 @@ function saveLedger(ledger) {
   fs.writeFileSync(LEDGER_PATH, JSON.stringify(ledger, null, 2) + '\n');
 }
 
-/**
- * テキスト(正規表現)にマッチする可視のクリック可能要素を探してクリックする。
- * link → button → その他クリック可能要素 の順で試す。
- */
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function sanitize(s) {
+  return String(s).replace(/[^\w぀-ヿ一-龯-]/g, '_').slice(0, 40);
+}
+
+// ---------------------------------------------------------------------------
+// ブラウザ起動: 全リクエストをNodeスタック (許可プロキシ経由) で処理する
+// サイトWAFがChromiumのTLSをリセットするための回避策。通信はすべて環境の
+// egressプロキシ (HTTPS_PROXY) を通り、ネットワークポリシーに従う。
+// ---------------------------------------------------------------------------
+
+async function launchBrowser() {
+  const browser = await chromium.launch({
+    proxy: { server: process.env.HTTPS_PROXY },
+  });
+  const ctx = await browser.newContext({
+    userAgent:
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
+    locale: 'ja-JP',
+    timezoneId: 'Asia/Tokyo',
+    viewport: { width: 1440, height: 900 },
+  });
+
+  await ctx.route('**/*', async (route) => {
+    const req = route.request();
+    const isNav = req.isNavigationRequest();
+    try {
+      const resp = await ctx.request.fetch(req, {
+        maxRedirects: isNav ? 0 : 20,
+        timeout: 30000,
+      });
+      const status = resp.status();
+      const headers = { ...resp.headers() };
+      const loc = headers['location'];
+      if (isNav && status >= 300 && status < 400 && loc) {
+        // ナビゲーションの30xはfulfillできないためJSで遷移させる
+        const target = new URL(loc, req.url()).href;
+        await route.fulfill({
+          status: 200,
+          contentType: 'text/html',
+          body: `<script>location.replace(${JSON.stringify(target)})</script>`,
+        });
+        return;
+      }
+      delete headers['content-encoding'];
+      delete headers['content-length'];
+      delete headers['transfer-encoding'];
+      await route.fulfill({ status, headers, body: await resp.body() });
+    } catch (e) {
+      await route.abort('failed').catch(() => {});
+    }
+  });
+
+  const page = await ctx.newPage();
+  page.setDefaultTimeout(CONFIG.stepTimeout);
+  return { browser, ctx, page };
+}
+
+// ---------------------------------------------------------------------------
+// 各ステップ
+// ---------------------------------------------------------------------------
+
+async function login(page) {
+  log(`ログイン: ${CONFIG.loginUrl}`);
+  await page.goto(CONFIG.loginUrl, { waitUntil: 'domcontentloaded' });
+  await snap(page, '01-login-page');
+  await page.fill('#email', CONFIG.email);
+  await page.fill('#password', CONFIG.password);
+  await page.click('#log_in');
+  await page.waitForTimeout(5000);
+  await snap(page, '02-after-login');
+  const url = page.url();
+  if (url.includes('/login') || url.startsWith('chrome-error')) {
+    throw new Error(`ログイン失敗 (URL: ${url})`);
+  }
+  log(`ログイン成功: ${url}`);
+}
+
+/** 保存した検索条件APIから対象条件のIDを取得する */
+async function findSearchConditionId(ctx) {
+  const resp = await ctx.request.get(
+    `${CONFIG.baseUrl}/scout/search_conditions/api/get`
+  );
+  if (!resp.ok()) {
+    throw new Error(`検索条件APIが ${resp.status()} を返しました`);
+  }
+  const data = await resp.json();
+  const items = data?.data?.scoutSearchConditionFavorites || [];
+  const target = items.find((it) => it.name === CONFIG.searchConditionName);
+  if (!target) {
+    throw new Error(
+      `検索条件「${CONFIG.searchConditionName}」が見つかりません。存在する条件: ` +
+        items.map((it) => it.name).join(' / ')
+    );
+  }
+  log(`検索条件 id=${target.id}「${target.name}」`);
+  return target.id;
+}
+
+/** クリック可能要素をテキストで探してクリックする */
 async function clickByText(page, regex, { timeout = CONFIG.stepTimeout } = {}) {
   const candidates = [
     page.getByRole('link', { name: regex }).first(),
     page.getByRole('button', { name: regex }).first(),
     page.getByText(regex).first(),
-    page.locator(`input[type="submit"]`).filter({ hasText: regex }).first(),
   ];
   const deadline = Date.now() + timeout;
   let lastErr = new Error(`clickable element not found for ${regex}`);
@@ -159,86 +241,19 @@ async function clickByText(page, regex, { timeout = CONFIG.stepTimeout } = {}) {
   throw lastErr;
 }
 
-async function fillFirstMatch(page, selectors, value) {
-  for (const sel of selectors) {
-    const loc = page.locator(sel).first();
-    try {
-      if (await loc.isVisible({ timeout: 1000 })) {
-        await loc.fill(value);
-        return sel;
-      }
-    } catch {
-      /* 次のセレクタへ */
-    }
-  }
-  throw new Error(`no visible input for selectors: ${selectors.join(', ')}`);
-}
-
-// ---------------------------------------------------------------------------
-// 各ステップ
-// ---------------------------------------------------------------------------
-
-async function login(page) {
-  log(`ログインページへ移動: ${CONFIG.loginUrl}`);
-  await page.goto(CONFIG.loginUrl, { waitUntil: 'domcontentloaded' });
-  await snap(page, '01-login-page');
-
-  await fillFirstMatch(page, UI.loginEmail, CONFIG.email);
-  await fillFirstMatch(page, UI.loginPassword, CONFIG.password);
-  await snap(page, '02-login-filled');
-
-  await Promise.all([
-    page.waitForLoadState('domcontentloaded'),
-    clickByText(page, UI.loginSubmit),
-  ]);
-  await page.waitForTimeout(2000);
-  await snap(page, '03-after-login');
-
-  if (page.url().includes('/login')) {
-    throw new Error(
-      `ログインに失敗した可能性があります (URLが /login のまま): ${page.url()}`
-    );
-  }
-  log(`ログイン成功: ${page.url()}`);
-}
-
-async function openSavedSearch(page) {
-  log('「スカウト」メニューを開く');
-  await clickByText(page, UI.navScout);
-  await page.waitForTimeout(1500);
-  await snap(page, '04-scout-menu');
-
-  log('「保存した検索条件」を開く');
-  await clickByText(page, UI.savedSearch);
-  await page.waitForTimeout(1500);
-  await snap(page, '05-saved-searches');
-
-  log(`検索条件「${CONFIG.searchConditionName}」を選択`);
-  await clickByText(page, new RegExp(escapeRegex(CONFIG.searchConditionName)));
-  await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(2500);
-  await snap(page, '06-candidate-list');
-}
-
-function escapeRegex(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 /**
- * 候補者一覧ページから候補者詳細へのリンクを収集する。
- * href に候補者IDらしきパスを含む a 要素を候補として拾う汎用ヒューリスティック。
+ * 候補者一覧ページから候補者詳細へのリンク/カードを収集する。
+ * SPAが描画した一覧から候補者ごとの遷移先を拾う汎用ヒューリスティック。
+ * 実画面確認後に必要ならセレクタを固定化する。
  */
 async function collectCandidateLinks(page) {
-  const links = await page.evaluate(() => {
+  return page.evaluate(() => {
     const seen = new Set();
     const out = [];
     for (const a of document.querySelectorAll('a[href]')) {
       const href = a.href;
-      // 候補者詳細ページらしきURLパターン (ID を含むパス)
       if (
-        /(candidate|resume|jobseeker|member|user|profile|scout\/detail)/i.test(
-          href
-        ) &&
+        /(candidate|resume|jobseeker|member|user_id|profile|scout\/detail)/i.test(href) &&
         /\d/.test(href) &&
         !seen.has(href) &&
         a.offsetParent !== null
@@ -249,36 +264,30 @@ async function collectCandidateLinks(page) {
     }
     return out;
   });
-  return links;
 }
 
-/**
- * 候補者詳細ページでスカウトを送る。戻り値: 'sent' | 'skipped' | 'dry-run'
- */
+/** 候補者詳細でスカウトを送る。戻り値: 'sent' | 'skipped' | 'dry-run' */
 async function sendScoutOnDetailPage(page, candidateLabel) {
-  // すでにスカウト済みならスキップ
   const already = page.getByText(UI.alreadyScouted).first();
   try {
     if (await already.isVisible({ timeout: 1500 })) {
       log(`  スカウト済みのためスキップ: ${candidateLabel}`);
       return 'skipped';
     }
-  } catch {
-    /* 表示なし = 未送信 */
-  }
+  } catch {}
 
   log('  「スカウトを送る」をクリック');
   await clickByText(page, UI.sendScoutButton);
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(2000);
   await snap(page, `scout-form-${sanitize(candidateLabel)}`);
 
   log('  テンプレート選択を開く');
   await clickByText(page, UI.templatePicker);
-  await page.waitForTimeout(1000);
+  await page.waitForTimeout(1500);
 
   log(`  テンプレート「${CONFIG.templateName}」を選択`);
   await clickByText(page, new RegExp(escapeRegex(CONFIG.templateName)));
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(2000);
   await snap(page, `template-selected-${sanitize(candidateLabel)}`);
 
   if (CONFIG.dryRun) {
@@ -288,22 +297,14 @@ async function sendScoutOnDetailPage(page, candidateLabel) {
 
   log('  スカウトを送付');
   await clickByText(page, UI.finalSendButton);
-  await page.waitForTimeout(1500);
-
-  // 確認ダイアログが出る場合に対応
+  await page.waitForTimeout(2000);
   try {
     await clickByText(page, UI.confirmButton, { timeout: 3000 });
-    await page.waitForTimeout(1500);
-  } catch {
-    /* 確認ダイアログなし */
-  }
+    await page.waitForTimeout(2000);
+  } catch {}
 
   await snap(page, `sent-${sanitize(candidateLabel)}`);
   return 'sent';
-}
-
-function sanitize(s) {
-  return s.replace(/[^\w぀-ヿ一-龯-]/g, '_').slice(0, 40);
 }
 
 // ---------------------------------------------------------------------------
@@ -312,11 +313,10 @@ function sanitize(s) {
 
 async function main() {
   if (!CONFIG.email || !CONFIG.password) {
-    console.error(
-      'OPENWORK_EMAIL / OPENWORK_PASSWORD 環境変数を設定してください。'
-    );
+    console.error('OPENWORK_EMAIL / OPENWORK_PASSWORD 環境変数を設定してください。');
     process.exit(1);
   }
+  fs.mkdirSync(LOG_DIR, { recursive: true });
 
   const ledger = loadLedger();
   const result = {
@@ -329,24 +329,30 @@ async function main() {
     errors: [],
   };
 
-  const browser = await chromium.launch({ headless: !CONFIG.headful });
-  const context = await browser.newContext({
-    locale: 'ja-JP',
-    timezoneId: 'Asia/Tokyo',
-    viewport: { width: 1440, height: 900 },
-  });
-  const page = await context.newPage();
-  page.setDefaultTimeout(CONFIG.stepTimeout);
+  const { browser, ctx, page } = await launchBrowser();
 
   try {
     await login(page);
-    await openSavedSearch(page);
+    const conditionId = await findSearchConditionId(ctx);
+
+    const listUrlBase = `${CONFIG.baseUrl}/scout/candidates?scout_search_condition_favorite_id=${conditionId}`;
+    await page.goto(listUrlBase, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(6000); // SPA描画待ち
+    await snap(page, '03-candidate-list');
+
+    // SPAが描画できているか確認 (assets.openwork.jp が許可されていないと空になる)
+    const bodyText = await page.evaluate(() => document.body.innerText);
+    if (/画面の読み込みに問題/.test(bodyText)) {
+      throw new Error(
+        '画面のJavaScriptが読み込めていません。環境の許可ドメインに assets.openwork.jp を追加してください。'
+      );
+    }
 
     let pageNum = 1;
     let totalSent = 0;
 
     while (totalSent < CONFIG.maxScouts) {
-      log(`--- 候補者一覧 ${pageNum} ページ目を処理 ---`);
+      log(`--- 候補者一覧 ${pageNum} ページ目 ---`);
       const listUrl = page.url();
       const links = await collectCandidateLinks(page);
       log(`候補者リンク検出: ${links.length} 件`);
@@ -355,14 +361,13 @@ async function main() {
         await dumpFailure(
           page,
           `no-candidates-page${pageNum}`,
-          new Error('候補者リンクが見つかりませんでした。UIセレクタの調整が必要かもしれません。')
+          new Error('候補者リンクが見つかりません。セレクタ調整が必要な可能性があります。')
         );
         break;
       }
 
       for (const link of links) {
         if (totalSent >= CONFIG.maxScouts) break;
-
         if (ledger[link.href]) {
           result.skipped.push({ ...link, reason: 'ledger' });
           continue;
@@ -371,7 +376,7 @@ async function main() {
         log(`候補者を開く: ${link.text || link.href}`);
         try {
           await page.goto(link.href, { waitUntil: 'domcontentloaded' });
-          await page.waitForTimeout(1500);
+          await page.waitForTimeout(3000);
 
           const status = await sendScoutOnDetailPage(page, link.text || 'unknown');
           if (status === 'sent' || status === 'dry-run') {
@@ -392,13 +397,12 @@ async function main() {
         }
       }
 
-      // 一覧へ戻り、次のページへ (100件超は「次へ」が必要)
+      // 一覧へ戻り「次へ」(100件超のページ送り)
       await page.goto(listUrl, { waitUntil: 'domcontentloaded' });
-      await page.waitForTimeout(2000);
+      await page.waitForTimeout(4000);
       try {
         await clickByText(page, UI.nextPage, { timeout: 5000 });
-        await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(2500);
+        await page.waitForTimeout(4000);
         pageNum++;
         await snap(page, `list-page-${pageNum}`);
       } catch {

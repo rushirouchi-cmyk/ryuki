@@ -1,0 +1,14 @@
+{
+  "date": "2026-07-16T11:02:29.311Z",
+  "searchCondition": "旭化成ホームズ【東京／神奈川】集合住宅営業",
+  "template": "旭化成ホームズ【東京】集合住宅営業（未経験）",
+  "dryRun": true,
+  "sent": [],
+  "skipped": [],
+  "errors": [
+    {
+      "fatal": true,
+      "error": "page.goto: net::ERR_CONNECTION_RESET at https://recruiting.vorkers.com/login\nCall log:\n\u001b[2m  - navigating to \"https://recruiting.vorkers.com/login\", waiting until \"domcontentloaded\"\u001b[22m\n"
+    }
+  ]
+}
