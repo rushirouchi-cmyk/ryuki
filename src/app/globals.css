@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-50: #eef4ff;
+  --color-brand-100: #dbe6ff;
+  --color-brand-200: #bed1ff;
+  --color-brand-300: #92b2ff;
+  --color-brand-400: #5f88fb;
+  --color-brand-500: #3a63f0;
+  --color-brand-600: #2545d6;
+  --color-brand-700: #1e37ab;
+  --color-brand-800: #1e3187;
+  --color-brand-900: #1e2d6b;
+
+  --color-ink-50: #f7f8fa;
+  --color-ink-100: #eef0f4;
+  --color-ink-200: #dde1e9;
+  --color-ink-300: #c2c9d6;
+  --color-ink-400: #8d97ab;
+  --color-ink-500: #667089;
+  --color-ink-600: #4b5468;
+  --color-ink-700: #363d4d;
+  --color-ink-800: #232935;
+  --color-ink-900: #151922;
+
+  --color-positive: #0f8a53;
+  --color-caution: #b45309;
+  --color-negative: #b91c1c;
+
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP",
+    Meiryo, sans-serif;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background-color: var(--color-ink-50);
+  color: var(--color-ink-800);
+  font-family: var(--font-sans);
+  line-height: 1.6;
+}
+
+/* Keep number columns readable when tables scroll horizontally. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}

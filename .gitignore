@@ -16,3 +16,14 @@ data/*.db-journal
 .DS_Store
 .idea/
 .vscode/
+
+# Next.js / Node
+node_modules/
+.next/
+next-env.d.ts
+out/
+build/
+*.tsbuildinfo
+
+# Embedded database
+data/pglite/
