@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import type { Database } from "@/lib/db";
 import {
   candidateContacts,
@@ -16,7 +16,7 @@ export interface AgentCandidateCard {
   referralId: number;
   status: string;
   referredAt: Date;
-  /** Withheld until a valid consent for this agency exists. */
+  /** Withheld unless an un-revoked consent for this agency exists. */
   contact: { fullName: string; email: string; phone: string | null } | null;
   age: number | null;
   currentRegion: string | null;
@@ -70,6 +70,8 @@ export async function loadAgentCandidate(
     .orderBy(desc(diagnoses.completedAt))
     .limit(1);
 
+  /* A revoked consent stops disclosure from here on; the row itself is kept
+   * because a referral must always point at the consent it was created under. */
   const [consent] = await db
     .select({ id: consents.id })
     .from(consents)
@@ -77,6 +79,7 @@ export async function loadAgentCandidate(
       and(
         eq(consents.candidateId, row.candidate.id),
         eq(consents.agentCompanyId, agentCompanyId),
+        isNull(consents.revokedAt),
       ),
     )
     .limit(1);

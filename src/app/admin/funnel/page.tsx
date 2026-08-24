@@ -6,7 +6,7 @@ import { buildFunnelSteps } from "@/lib/analytics/funnel-steps";
 import { Card, CardTitle, NumTd, PageHeader, TableWrap, Td, Th } from "@/components/ui";
 import { PeriodTabs } from "@/components/analytics/period-tabs";
 import { FilterBar } from "@/components/analytics/filter-bar";
-import { FunnelChart } from "@/components/analytics/funnel-chart";
+import { FunnelChart, FunnelScaleNote } from "@/components/analytics/funnel-chart";
 import { formatNumber, formatPercent } from "@/lib/utils/format";
 
 export default async function FunnelPage({
@@ -47,6 +47,7 @@ export default async function FunnelPage({
           <CardTitle>全体ファネル</CardTitle>
           <div className="mt-4">
             <FunnelChart steps={steps} />
+            <FunnelScaleNote />
           </div>
         </Card>
 

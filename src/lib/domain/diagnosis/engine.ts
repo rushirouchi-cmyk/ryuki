@@ -161,7 +161,13 @@ export function runDiagnosis(
 
 /**
  * Keeps the headline range inside a defensible multiple of what the candidate
- * earns today, while never pulling the range below the market floor itself.
+ * earns today, so sparse benchmark data cannot turn into a "your pay could
+ * triple" claim on a street corner.
+ *
+ * The cap yields when the market floor for the qualifying occupations is
+ * itself above the ceiling: at that point the data is unambiguous that the
+ * candidate is far below market, and quoting a lower figure would be the
+ * dishonest direction. Only the top of the range is ever trimmed.
  */
 function capProjection(
   projected: { low: number; high: number } | null,

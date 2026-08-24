@@ -137,7 +137,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   return (
     <div className="flex items-start justify-between gap-3 border-b border-ink-100 pb-1.5">
       <dt className="shrink-0 text-ink-500">{label}</dt>
-      <dd className="text-right font-medium text-ink-900">{children}</dd>
+      <dd className="break-all text-right font-medium text-ink-900">{children}</dd>
     </div>
   );
 }

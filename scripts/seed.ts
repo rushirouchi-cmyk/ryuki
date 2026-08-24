@@ -7,7 +7,7 @@ import "dotenv/config";
  */
 process.env.TZ = process.env.TZ ?? "Asia/Tokyo";
 
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { getDb, resolveDriver, type Database } from "../src/lib/db";
 import { runMigrations } from "../src/lib/db/migrate";
 import {
@@ -18,6 +18,7 @@ import {
   agentSalaryBands,
   agentSpecialties,
   appSettings,
+  candidates,
   careerTransitionRules,
   certifications,
   incentiveRules,
@@ -720,6 +721,15 @@ async function simulateFunnel(
       if (scheduledAt > today) continue;
       if (!random.chance(0.72)) continue;
       await completeInterview(db, bookingId, adminId, scheduledAt);
+
+      /* Only candidates the qualification rule accepted are sent to agencies,
+       * which is what keeps the admin funnel monotonic. */
+      const [candidateRow] = await db
+        .select({ qualified: candidates.qualified })
+        .from(candidates)
+        .where(eq(candidates.id, scan.candidateId))
+        .limit(1);
+      if (!candidateRow?.qualified) continue;
 
       const recommendations = await buildRecommendations(
         db,

@@ -112,8 +112,12 @@ export const areaScoreMetricKeys = [
 export type AreaScoreMetricKey = (typeof areaScoreMetricKeys)[number];
 
 export const areaScoreConfigSchema = z.object({
-  /** Weight per metric; the score is a weighted percentile against peers. */
-  weights: z.record(z.enum(areaScoreMetricKeys), z.number().min(0)),
+  /**
+   * Weight per metric; the score is a weighted percentile against peers.
+   * Omitted metrics are simply not scored, so an operator can narrow the
+   * score down to the handful of numbers they actually steer by.
+   */
+  weights: z.partialRecord(z.enum(areaScoreMetricKeys), z.number().min(0)),
   /** Below this many sales hours the score is shown as "insufficient data". */
   minSalesHours: z.number().min(0),
   /** Below this many approaches the score is shown as "insufficient data". */

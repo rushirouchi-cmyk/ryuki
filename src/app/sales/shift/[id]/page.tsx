@@ -80,6 +80,8 @@ export default async function ShiftDetailPage({
           <CardTitle>この営業専用のQRコード</CardTitle>
           <div className="mt-3 flex flex-col items-center gap-3 sm:flex-row sm:items-center">
             <div
+              role="img"
+              aria-label={`${row.location.venueName} の営業用QRコード`}
               className="shrink-0 rounded-xl bg-white p-2 [&>svg]:h-44 [&>svg]:w-44"
               // QR is generated server-side from an internal URL; no user input.
               dangerouslySetInnerHTML={{ __html: qrSvg }}

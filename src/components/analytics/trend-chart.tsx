@@ -56,6 +56,7 @@ export function TrendChart({ data }: { data: TrendPoint[] }) {
             stroke="#3a63f0"
             strokeWidth={2}
             dot={false}
+            isAnimationActive={false}
           />
           <Line
             type="monotone"
@@ -64,6 +65,7 @@ export function TrendChart({ data }: { data: TrendPoint[] }) {
             stroke="#0f8a53"
             strokeWidth={2}
             dot={false}
+            isAnimationActive={false}
           />
           <Line
             type="monotone"
@@ -72,6 +74,7 @@ export function TrendChart({ data }: { data: TrendPoint[] }) {
             stroke="#b45309"
             strokeWidth={2}
             dot={false}
+            isAnimationActive={false}
           />
         </LineChart>
       </ResponsiveContainer>

@@ -158,6 +158,8 @@ function dimensionSpec(dimension: BreakdownDimension): DimensionSpec {
 /* Aggregation                                                                */
 /* -------------------------------------------------------------------------- */
 
+/* Each step counts distinct candidates, so a candidate referred to two
+ * agencies is one person in the funnel rather than two. */
 const EVENT_COUNT_COLUMNS = {
   scans: "qr_scanned",
   diagnosisStarted: "diagnosis_started",
@@ -176,7 +178,7 @@ type EventCountKey = keyof typeof EVENT_COUNT_COLUMNS;
 function eventCountSelection() {
   const selection: Record<string, SQL<number>> = {};
   for (const [field, eventType] of Object.entries(EVENT_COUNT_COLUMNS)) {
-    selection[field] = sql<number>`count(*) filter (where ${candidateEvents.eventType} = ${eventType})::int`;
+    selection[field] = sql<number>`count(distinct ${candidateEvents.candidateId}) filter (where ${candidateEvents.eventType} = ${eventType})::int`;
   }
   return selection as Record<EventCountKey, SQL<number>>;
 }

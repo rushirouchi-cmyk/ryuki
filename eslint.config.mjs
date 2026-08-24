@@ -1,18 +1,21 @@
-import { dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-import { FlatCompat } from "@eslint/eslintrc";
+import next from "eslint-config-next";
+import tseslint from "typescript-eslint";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const compat = new FlatCompat({ baseDirectory: __dirname });
-
+/* eslint-config-next 16 ships a flat config array; no eslintrc compat needed. */
 const config = [
-  ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
-    ignores: [".next/**", "node_modules/**", "drizzle/**", "data/**"],
+    ignores: [
+      ".next/**",
+      "node_modules/**",
+      "drizzle/**",
+      "data/**",
+      "next-env.d.ts",
+    ],
   },
+  ...next,
   {
+    files: ["**/*.ts", "**/*.tsx"],
+    plugins: { "@typescript-eslint": tseslint.plugin },
     rules: {
       "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/no-unused-vars": [

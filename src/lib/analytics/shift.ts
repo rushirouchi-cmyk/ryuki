@@ -55,8 +55,9 @@ export async function getShiftMetrics(
     .from(shifts)
     .where(inArray(shifts.id, shiftIds));
 
+  /* Distinct candidates, matching the definition used by the admin funnel. */
   const countOf = (eventType: string) =>
-    sql<number>`count(*) filter (where ${candidateEvents.eventType} = ${eventType})::int`;
+    sql<number>`count(distinct ${candidateEvents.candidateId}) filter (where ${candidateEvents.eventType} = ${eventType})::int`;
 
   const eventRows = await db
     .select({

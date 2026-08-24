@@ -29,7 +29,7 @@ export default async function ResultPage({
   const hasUplift = (diagnosis.upliftHigh ?? 0) > 0;
 
   return (
-    <main className="px-5 pb-28 pt-8">
+    <main className="px-5 pb-44 pt-8">
       <p className="text-sm font-semibold text-brand-600">診断結果</p>
       <h1 className="mt-1 text-2xl font-bold text-ink-900">
         {hasUplift
@@ -114,8 +114,13 @@ export default async function ResultPage({
         </Card>
       ) : (
         <Card className="mt-4">
-          <p className="text-sm text-ink-600">
-            現在のご経験に近い職種のデータが不足しているため、近接職種の提案は表示していません。キャリア面談で詳しくお伺いします。
+          <h2 className="text-sm font-semibold text-ink-500">想定年収レンジの根拠</h2>
+          <p className="mt-2 text-sm leading-relaxed text-ink-600">
+            {currentOccupation
+              ? `上記のレンジは、現在のご経験（${currentOccupation.occupationName}）の市場年収水準にもとづく推定です。`
+              : "上記のレンジは、現在のご経験の市場年収水準にもとづく推定です。"}
+            現時点のご回答からは、条件に合う近接職種を特定できませんでした。キャリア面談では、より詳しくお伺いしたうえで、
+            転職可能性のある職種をご提案します。
           </p>
         </Card>
       )}

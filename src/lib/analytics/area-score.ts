@@ -45,6 +45,39 @@ function metricValue(row: BreakdownRow, metric: AreaScoreMetricKey): number | nu
 }
 
 /**
+ * Percentile per key, with tied values sharing the average of the positions
+ * they span. Without that, two areas with identical numbers would land at
+ * opposite ends of the scale purely because of sort order.
+ */
+function percentileMap(
+  values: readonly { key: string; value: number }[],
+): Map<string, number> {
+  const map = new Map<string, number>();
+  if (values.length === 0) return map;
+  if (values.length === 1) {
+    const only = values[0];
+    if (only) map.set(only.key, 0.5);
+    return map;
+  }
+
+  const last = values.length - 1;
+  let index = 0;
+  while (index < values.length) {
+    let end = index;
+    while (end + 1 < values.length && values[end + 1]?.value === values[index]?.value) {
+      end += 1;
+    }
+    const shared = (index + end) / 2 / last;
+    for (let position = index; position <= end; position += 1) {
+      const entry = values[position];
+      if (entry) map.set(entry.key, shared);
+    }
+    index = end + 1;
+  }
+  return map;
+}
+
+/**
  * Scores every area against its peers rather than against absolute targets:
  * at MVP volumes there is no reliable absolute benchmark, and the question the
  * business actually asks is "where should tomorrow's shift go".
@@ -70,16 +103,7 @@ export function computeAreaScores(
       .filter((entry): entry is { key: string; value: number } => entry.value !== null)
       .sort((a, b) => a.value - b.value);
 
-    const map = new Map<string, number>();
-    const only = values[0];
-    if (values.length === 1 && only) {
-      map.set(only.key, 0.5);
-    } else {
-      values.forEach((entry, index) => {
-        map.set(entry.key, index / (values.length - 1));
-      });
-    }
-    percentiles.set(metric, map);
+    percentiles.set(metric, percentileMap(values));
   }
 
   const results = new Map<string, AreaScoreResult>();
