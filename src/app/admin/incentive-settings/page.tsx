@@ -23,6 +23,7 @@ import {
 import {
   INCENTIVE_EVENT_LABELS,
   INCENTIVE_STATUS_LABELS,
+  REVENUE_EVENT_LABELS,
   labelOf,
 } from "@/lib/utils/labels";
 import { formatYen } from "@/lib/utils/format";
@@ -208,7 +209,7 @@ export default async function IncentiveSettingsPage() {
                           />
                         </Td>
                         <Td>{entry.agentName}</Td>
-                        <Td>{entry.eventType}</Td>
+                        <Td>{labelOf(REVENUE_EVENT_LABELS, entry.eventType)}</Td>
                         <NumTd>{formatYen(entry.amountYen)}</NumTd>
                         <Td className="text-ink-500">
                           {entry.occurredAt.toLocaleDateString("ja-JP")}

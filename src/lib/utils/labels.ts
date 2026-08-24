@@ -32,6 +32,13 @@ export const REFERRAL_STATUS_LABELS: Record<string, string> = {
   lost: "終了",
 };
 
+export const REVENUE_EVENT_LABELS: Record<string, string> = {
+  agent_accepted: "エージェント受諾",
+  agent_interview_completed: "エージェント面談実施",
+  offer: "内定",
+  joined: "入社",
+};
+
 export const INCENTIVE_STATUS_LABELS: Record<string, string> = {
   pending: "承認待ち",
   approved: "承認済み",

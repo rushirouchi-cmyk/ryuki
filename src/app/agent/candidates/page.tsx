@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { and, desc, eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { candidates, diagnoses, occupations, referrals } from "@/lib/db/schema";
+import { candidates, occupations, referrals } from "@/lib/db/schema";
+import { latestDiagnosisFor } from "@/lib/domain/diagnosis/latest";
 import { requireRole } from "@/lib/auth/guards";
 import {
   Badge,
@@ -24,26 +25,25 @@ export default async function AgentCandidatesPage() {
   }
 
   const db = await getDb();
+  const diagnosis = latestDiagnosisFor(db);
+
   const rows = await db
     .select({
       referralId: referrals.id,
       status: referrals.status,
       referredAt: referrals.referredAt,
-      matchRank: diagnoses.matchRank,
-      currentSalary: diagnoses.currentSalaryYen,
-      estimatedLow: diagnoses.estimatedSalaryLow,
-      estimatedHigh: diagnoses.estimatedSalaryHigh,
-      experienceYears: diagnoses.experienceYears,
+      matchRank: diagnosis.matchRank,
+      currentSalary: diagnosis.currentSalaryYen,
+      estimatedLow: diagnosis.estimatedSalaryLow,
+      estimatedHigh: diagnosis.estimatedSalaryHigh,
+      experienceYears: diagnosis.experienceYears,
       occupationName: occupations.name,
       offerSalary: referrals.offerSalaryYen,
     })
     .from(referrals)
     .innerJoin(candidates, eq(referrals.candidateId, candidates.id))
-    .leftJoin(
-      diagnoses,
-      and(eq(diagnoses.candidateId, candidates.id), eq(diagnoses.status, "completed")),
-    )
-    .leftJoin(occupations, eq(diagnoses.currentOccupationId, occupations.id))
+    .leftJoin(diagnosis, eq(diagnosis.candidateId, candidates.id))
+    .leftJoin(occupations, eq(diagnosis.currentOccupationId, occupations.id))
     .where(eq(referrals.agentCompanyId, companyId))
     .orderBy(desc(referrals.referredAt));
 

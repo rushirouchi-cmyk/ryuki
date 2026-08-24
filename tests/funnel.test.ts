@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import type { Database } from "@/lib/db";
-import { candidates, referrals, revenueEvents } from "@/lib/db/schema";
+import { candidates, diagnoses, referrals, revenueEvents } from "@/lib/db/schema";
 import {
   bookInterview,
   completeDiagnosis,
@@ -12,6 +12,8 @@ import {
 } from "@/lib/domain/candidates/service";
 import { buildRecommendations, referCandidate, updateReferralStatus } from "@/lib/domain/agents/service";
 import { getBreakdown, getOverview } from "@/lib/analytics/queries";
+import { getAgentPerformance } from "@/lib/analytics/agents";
+import { latestDiagnosisFor } from "@/lib/domain/diagnosis/latest";
 import { getShiftMetrics } from "@/lib/analytics/shift";
 import { computeRates } from "@/lib/analytics/metrics";
 import type { DiagnosisAnswers } from "@/lib/domain/diagnosis/questionnaire";
@@ -204,5 +206,97 @@ describe("funnel aggregation from the event log", () => {
     await db.update(revenueEvents).set({ status: "confirmed" });
     const { financials } = await getOverview(db, ALL_TIME);
     expect(financials.confirmedRevenueYen).toBe(430_000);
+  });
+});
+
+describe("candidates who retake the diagnosis", () => {
+  let db: Database;
+  let cleanup: () => void;
+  let fixtures: Fixtures;
+  let candidateId: string;
+
+  beforeAll(async () => {
+    ({ db, cleanup } = await createTestDb());
+    fixtures = await seedFixtures(db);
+
+    const answers = {
+      currentSalaryBand: "400_450",
+      currentOccupationId: fixtures.mechanicId,
+      currentIndustry: "automotive",
+      experienceBand: "6-9",
+      skillIds: [fixtures.skills.fault_diagnosis as number],
+      certificationIds: [],
+      managementBand: "none",
+      employmentType: "full_time",
+      currentRegionId: fixtures.regionId,
+      desiredRegionIds: [fixtures.regionId],
+      relocationOk: false,
+      travelOk: true,
+      nightShiftOk: false,
+      educationLevel: "vocational",
+      desiredConditions: ["salary_up"],
+      desiredTiming: "3_6m",
+    } as DiagnosisAnswers;
+
+    const scan = await handleQrScan(db, fixtures.qrToken, null);
+    candidateId = scan!.candidateId;
+
+    /* Two completed diagnoses for one person, as happens on a resubmit. */
+    const first = await startDiagnosis(db, candidateId);
+    await completeDiagnosis(db, candidateId, first.diagnosisId, answers);
+    const second = await startDiagnosis(db, candidateId);
+    await completeDiagnosis(db, candidateId, second.diagnosisId, {
+      ...answers,
+      currentSalaryBand: "500_600",
+    } as DiagnosisAnswers);
+
+    await registerLead(db, candidateId, {
+      fullName: "再診断 太郎",
+      email: "retake@example.com",
+    });
+    await referCandidate(db, candidateId, [fixtures.agentCompanyId]);
+  }, 120_000);
+
+  afterAll(() => cleanup());
+
+  it("keeps both diagnoses in the history", async () => {
+    const rows = await db
+      .select()
+      .from(diagnoses)
+      .where(eq(diagnoses.candidateId, candidateId));
+    expect(rows.filter((row) => row.status === "completed")).toHaveLength(2);
+  });
+
+  it("counts the person once in the funnel", async () => {
+    const { funnel } = await getOverview(db, ALL_TIME);
+    expect(funnel.scans).toBe(1);
+    expect(funnel.diagnosisCompleted).toBe(1);
+    expect(funnel.leads).toBe(1);
+  });
+
+  it("lists the person once, showing the most recent diagnosis", async () => {
+    const rows = await db
+      .select({
+        candidateId: candidates.id,
+        currentSalary: latestDiagnosisFor(db).currentSalaryYen,
+      })
+      .from(candidates)
+      .leftJoin(
+        latestDiagnosisFor(db),
+        eq(latestDiagnosisFor(db).candidateId, candidates.id),
+      )
+      .where(eq(candidates.id, candidateId));
+
+    expect(rows).toHaveLength(1);
+    /* The retake said 500-600万, not the original 400-450万. */
+    expect(rows[0]?.currentSalary).toBe(5_500_000);
+  });
+
+  it("does not double-count the referral in agency performance", async () => {
+    const performance = await getAgentPerformance(db, ALL_TIME.from, ALL_TIME.to);
+    const agency = performance.find(
+      (row) => row.agentCompanyId === fixtures.agentCompanyId,
+    );
+    expect(agency?.referrals).toBe(1);
   });
 });

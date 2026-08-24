@@ -259,11 +259,19 @@ const ledgerStatusSchema = z.object({
   status: z.enum(["pending", "approved", "rejected", "paid"]),
 });
 
-export async function updateLedgerStatusAction(formData: FormData): Promise<void> {
+/**
+ * The status is bound into the action rather than carried on the submit
+ * button: React reuses a button's `name` to encode which server action to
+ * invoke, so a `name`/`value` pair there would be silently discarded.
+ */
+export async function updateLedgerStatusAction(
+  status: string,
+  formData: FormData,
+): Promise<void> {
   const user = await assertRole("admin");
   const parsed = ledgerStatusSchema.safeParse({
     ids: formData.getAll("ledgerId"),
-    status: formData.get("status"),
+    status,
   });
   if (!parsed.success) return;
 

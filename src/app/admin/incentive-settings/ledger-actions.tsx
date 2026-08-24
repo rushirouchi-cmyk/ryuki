@@ -6,24 +6,23 @@ import { confirmRevenueAction, updateLedgerStatusAction } from "@/app/admin/acti
 export function LedgerActions() {
   return (
     <div className="mt-3 flex flex-wrap gap-2">
-      <Button type="submit" formAction={updateLedgerStatusAction} name="status" value="approved">
+      <Button
+        type="submit"
+        formAction={updateLedgerStatusAction.bind(null, "approved")}
+      >
         選択を承認
       </Button>
       <Button
         type="submit"
         variant="secondary"
-        formAction={updateLedgerStatusAction}
-        name="status"
-        value="rejected"
+        formAction={updateLedgerStatusAction.bind(null, "rejected")}
       >
         選択を却下
       </Button>
       <Button
         type="submit"
         variant="secondary"
-        formAction={updateLedgerStatusAction}
-        name="status"
-        value="paid"
+        formAction={updateLedgerStatusAction.bind(null, "paid")}
       >
         選択を支払済みに
       </Button>

@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import type { Database } from "@/lib/db";
 import { incentiveLedger, incentiveRules } from "@/lib/db/schema";
@@ -313,5 +314,53 @@ describe("incentive accrual", () => {
       new Date(2100, 0, 1),
     );
     expect(totals.approvedYen).toBeGreaterThanOrEqual(800);
+  });
+});
+
+describe("admin ledger approval", () => {
+  let db: Database;
+  let cleanup: () => void;
+  let fixtures: Fixtures;
+
+  beforeAll(async () => {
+    ({ db, cleanup } = await createTestDb());
+    fixtures = await seedFixtures(db);
+  }, 120_000);
+
+  afterAll(() => cleanup());
+
+  it("validates the status the admin action was bound with", async () => {
+    /* Guards the shape the UI relies on: the status is bound into the action,
+     * because React reuses a submit button's `name` for the action id. */
+    const schema = z.enum(["pending", "approved", "rejected", "paid"]);
+    expect(schema.safeParse("approved").success).toBe(true);
+    expect(schema.safeParse("").success).toBe(false);
+    expect(schema.safeParse(null).success).toBe(false);
+  });
+
+  it("keeps a rejected entry out of the payable total", async () => {
+    const scan = await handleQrScan(db, fixtures.qrToken, null);
+    const candidateId = scan!.candidateId;
+    await accrueIncentive(db, {
+      salesUserId: fixtures.salesUserId,
+      candidateId,
+      shiftId: fixtures.shiftId,
+      eventType: "agent_referred",
+    });
+
+    for (const status of ["approved", "paid", "rejected"] as const) {
+      await db
+        .update(incentiveLedger)
+        .set({ status })
+        .where(eq(incentiveLedger.candidateId, candidateId));
+
+      const totals = await getIncentiveTotals(
+        db,
+        fixtures.salesUserId,
+        new Date(2000, 0, 1),
+        new Date(2100, 0, 1),
+      );
+      expect(totals.totalYen).toBe(status === "rejected" ? 0 : 5_000);
+    }
   });
 });

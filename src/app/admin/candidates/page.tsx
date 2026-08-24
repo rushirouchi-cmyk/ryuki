@@ -4,11 +4,11 @@ import { getDb } from "@/lib/db";
 import {
   candidateContacts,
   candidates,
-  diagnoses,
   locations,
   occupations,
   users,
 } from "@/lib/db/schema";
+import { latestDiagnosisFor } from "@/lib/domain/diagnosis/latest";
 import { resolvePeriod } from "@/lib/analytics/period";
 import {
   Badge,
@@ -32,6 +32,7 @@ export default async function AdminCandidatesPage({
   const params = await searchParams;
   const period = resolvePeriod(params);
   const db = await getDb();
+  const diagnosis = latestDiagnosisFor(db);
 
   const rows = await db
     .select({
@@ -43,20 +44,17 @@ export default async function AdminCandidatesPage({
       salesName: users.name,
       venueName: locations.venueName,
       occupationName: occupations.name,
-      currentSalary: diagnoses.currentSalaryYen,
-      estimatedLow: diagnoses.estimatedSalaryLow,
-      estimatedHigh: diagnoses.estimatedSalaryHigh,
-      matchRank: diagnoses.matchRank,
+      currentSalary: diagnosis.currentSalaryYen,
+      estimatedLow: diagnosis.estimatedSalaryLow,
+      estimatedHigh: diagnosis.estimatedSalaryHigh,
+      matchRank: diagnosis.matchRank,
     })
     .from(candidates)
     .leftJoin(candidateContacts, eq(candidateContacts.candidateId, candidates.id))
     .leftJoin(users, eq(candidates.salesUserId, users.id))
     .leftJoin(locations, eq(candidates.locationId, locations.id))
-    .leftJoin(
-      diagnoses,
-      and(eq(diagnoses.candidateId, candidates.id), eq(diagnoses.status, "completed")),
-    )
-    .leftJoin(occupations, eq(diagnoses.currentOccupationId, occupations.id))
+    .leftJoin(diagnosis, eq(diagnosis.candidateId, candidates.id))
+    .leftJoin(occupations, eq(diagnosis.currentOccupationId, occupations.id))
     .where(
       and(gte(candidates.createdAt, period.from), lte(candidates.createdAt, period.to)),
     )

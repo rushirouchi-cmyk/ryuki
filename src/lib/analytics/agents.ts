@@ -2,11 +2,11 @@ import { and, count, eq, gte, lte, sql } from "drizzle-orm";
 import type { Database } from "@/lib/db";
 import {
   agentCompanies,
-  diagnoses,
   occupations,
   referrals,
   revenueEvents,
 } from "@/lib/db/schema";
+import { latestDiagnosisFor } from "@/lib/domain/diagnosis/latest";
 import { safeDivide } from "@/lib/utils/format";
 
 export interface AgentPerformanceRow {
@@ -32,6 +32,7 @@ export async function getAgentPerformance(
   from: Date,
   to: Date,
 ): Promise<AgentPerformanceRow[]> {
+  const diagnosis = latestDiagnosisFor(db);
   const rows = await db
     .select({
       agentCompanyId: agentCompanies.id,
@@ -43,7 +44,7 @@ export async function getAgentPerformance(
       offers: sql<number>`count(*) filter (where ${referrals.offerAt} is not null)::int`,
       joined: sql<number>`count(*) filter (where ${referrals.joinedAt} is not null)::int`,
       avgOfferSalary: sql<number | null>`avg(${referrals.offerSalaryYen})`,
-      avgIncrease: sql<number | null>`avg(${referrals.offerSalaryYen} - ${diagnoses.currentSalaryYen})`,
+      avgIncrease: sql<number | null>`avg(${referrals.offerSalaryYen} - ${diagnosis.currentSalaryYen})`,
     })
     .from(agentCompanies)
     .leftJoin(
@@ -54,13 +55,7 @@ export async function getAgentPerformance(
         lte(referrals.referredAt, to),
       ),
     )
-    .leftJoin(
-      diagnoses,
-      and(
-        eq(diagnoses.candidateId, referrals.candidateId),
-        eq(diagnoses.status, "completed"),
-      ),
-    )
+    .leftJoin(diagnosis, eq(diagnosis.candidateId, referrals.candidateId))
     .groupBy(agentCompanies.id, agentCompanies.name)
     .orderBy(agentCompanies.name);
 
@@ -111,6 +106,7 @@ export interface AgentOccupationRow {
 export async function getAgentOccupationPerformance(
   db: Database,
 ): Promise<AgentOccupationRow[]> {
+  const diagnosis = latestDiagnosisFor(db);
   const rows = await db
     .select({
       agentCompanyId: agentCompanies.id,
@@ -121,14 +117,8 @@ export async function getAgentOccupationPerformance(
     })
     .from(referrals)
     .innerJoin(agentCompanies, eq(referrals.agentCompanyId, agentCompanies.id))
-    .innerJoin(
-      diagnoses,
-      and(
-        eq(diagnoses.candidateId, referrals.candidateId),
-        eq(diagnoses.status, "completed"),
-      ),
-    )
-    .innerJoin(occupations, eq(diagnoses.currentOccupationId, occupations.id))
+    .innerJoin(diagnosis, eq(diagnosis.candidateId, referrals.candidateId))
+    .innerJoin(occupations, eq(diagnosis.currentOccupationId, occupations.id))
     .groupBy(agentCompanies.id, agentCompanies.name, occupations.name)
     .orderBy(agentCompanies.name, occupations.name);
 
