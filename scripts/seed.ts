@@ -1,4 +1,12 @@
 import "dotenv/config";
+
+/*
+ * Shift start times are business wall-clock times, and the analytics layer
+ * buckets them in Asia/Tokyo. Pin the process timezone before any Date is
+ * constructed so a seed run on a UTC machine produces the same dataset.
+ */
+process.env.TZ = process.env.TZ ?? "Asia/Tokyo";
+
 import { sql } from "drizzle-orm";
 import { getDb, resolveDriver, type Database } from "../src/lib/db";
 import { runMigrations } from "../src/lib/db/migrate";
@@ -58,7 +66,7 @@ import {
 import { createRandom, type Random } from "./seed/random";
 
 const SEED_PASSWORD = process.env.SEED_PASSWORD ?? "password123";
-const WEEKS_OF_HISTORY = 8;
+const WEEKS_OF_HISTORY = 14;
 const SHIFTS_PER_WEEK = 7;
 
 const BAND_MULTIPLIER: Record<string, number> = {
