@@ -1,0 +1,41 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-brand-50: #eef4ff;
+  --color-brand-100: #dbe6ff;
+  --color-brand-200: #bed1ff;
+  --color-brand-300: #93b1ff;
+  --color-brand-400: #6088ff;
+  --color-brand-500: #3b63f6;
+  --color-brand-600: #2545e3;
+  --color-brand-700: #1e35c4;
+  --color-brand-800: #1e2f9e;
+  --color-brand-900: #1e2d7c;
+  --color-ink-500: #64748b;
+  --color-ink-700: #334155;
+  --color-ink-900: #0f172a;
+  --font-sans:
+    'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Noto Sans JP', Meiryo, system-ui, -apple-system,
+    'Segoe UI', sans-serif;
+}
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: #f6f7fb;
+  color: var(--color-ink-900);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Numeric tables and KPI values read better with tabular figures. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
