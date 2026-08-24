@@ -55,13 +55,21 @@ export async function getShiftMetrics(
     .from(shifts)
     .where(inArray(shifts.id, shiftIds));
 
-  const eventSelection: Record<string, ReturnType<typeof sql<number>>> = {};
-  for (const [field, eventType] of Object.entries(EVENT_FIELDS)) {
-    eventSelection[field] = sql<number>`count(*) filter (where ${candidateEvents.eventType} = ${eventType})::int`;
-  }
+  const countOf = (eventType: string) =>
+    sql<number>`count(*) filter (where ${candidateEvents.eventType} = ${eventType})::int`;
 
   const eventRows = await db
-    .select({ shiftId: candidateEvents.shiftId, ...eventSelection })
+    .select({
+      shiftId: candidateEvents.shiftId,
+      scanCount: countOf(EVENT_FIELDS.scanCount),
+      diagnosisStarted: countOf(EVENT_FIELDS.diagnosisStarted),
+      diagnosisCompleted: countOf(EVENT_FIELDS.diagnosisCompleted),
+      leadRegistered: countOf(EVENT_FIELDS.leadRegistered),
+      interviewBooked: countOf(EVENT_FIELDS.interviewBooked),
+      interviewCompleted: countOf(EVENT_FIELDS.interviewCompleted),
+      qualifiedCount: countOf(EVENT_FIELDS.qualifiedCount),
+      referralCount: countOf(EVENT_FIELDS.referralCount),
+    })
     .from(candidateEvents)
     .where(inArray(candidateEvents.shiftId, shiftIds))
     .groupBy(candidateEvents.shiftId);

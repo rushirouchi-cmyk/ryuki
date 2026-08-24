@@ -1,4 +1,6 @@
 import path from "node:path";
+import type { ExtractTablesWithRelations } from "drizzle-orm";
+import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
 import { drizzle as drizzlePostgres } from "drizzle-orm/postgres-js";
 import * as schema from "./schema";
@@ -12,9 +14,11 @@ import * as schema from "./schema";
  *   external service. Both are the same PostgreSQL dialect, so the schema,
  *   migrations and queries are identical.
  */
-export type Database =
-  | ReturnType<typeof drizzlePglite<typeof schema>>
-  | ReturnType<typeof drizzlePostgres<typeof schema>>;
+export type Database = PgDatabase<
+  PgQueryResultHKT,
+  typeof schema,
+  ExtractTablesWithRelations<typeof schema>
+>;
 
 export type DbDriver = "postgres" | "pglite";
 
@@ -23,7 +27,8 @@ export function resolveDriver(url = process.env.DATABASE_URL): DbDriver {
 }
 
 export function resolvePgliteDir(): string {
-  return path.resolve(process.env.PGLITE_DATA_DIR ?? "./data/pglite");
+  /* Runtime-only path: the bundler must not try to trace it. */
+  return path.resolve(/* turbopackIgnore: true */ process.env.PGLITE_DATA_DIR ?? "./data/pglite");
 }
 
 async function createDatabase(): Promise<Database> {

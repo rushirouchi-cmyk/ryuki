@@ -27,3 +27,4 @@ build/
 
 # Embedded database
 data/pglite/
+tsconfig.tsbuildinfo
