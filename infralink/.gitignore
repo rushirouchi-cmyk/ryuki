@@ -1,0 +1,23 @@
+node_modules/
+.next/
+out/
+build/
+
+# ローカル SQLite 開発用 DB（prisma/data/ 配下にも作られるため階層を限定しない）
+*.db
+*.db-journal
+*.sqlite
+
+# 環境変数（.env.example のみコミットする）
+.env
+.env.*
+!.env.example
+
+# 生成物
+sheets-template/
+next-env.d.ts
+*.tsbuildinfo
+
+.DS_Store
+.idea/
+.vscode/

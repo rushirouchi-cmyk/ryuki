@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * 業務システムとしての方針 (§44):
+ *   情報密度を上げ、装飾を減らし、状態は色 + アイコン + テキストの三重で示す (§45)。
+ */
+
+:root {
+  --bg: #ffffff;
+  --bg-subtle: #f7f8fa;
+  --border: #e3e5ea;
+  --text: #1c1f26;
+  --text-muted: #666d7a;
+  --accent: #1f5eff;
+}
+
+html,
+body {
+  background: var(--bg-subtle);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic UI',
+    Meiryo, sans-serif;
+  font-size: 14px;
+}
+
+/* 数値列は等幅で揃える。 */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+table {
+  border-collapse: collapse;
+}
+
+/* スクロールバーを細く (情報量を優先) */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #c9ccd4;
+  border-radius: 5px;
+  border: 2px solid var(--bg-subtle);
+}

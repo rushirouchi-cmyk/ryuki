@@ -37,6 +37,10 @@
 | [docs/prompts.md](docs/prompts.md) | プロンプト設計方針とテンプレート一覧 |
 | [docs/roadmap.md](docs/roadmap.md) | フェーズ別の実装ロードマップ |
 
+## INFRALINK AI Talent Intelligence System
+
+[`infralink/`](infralink/) に、インフラリンク株式会社向けの AI 人材紹介オペレーションシステム（人材紹介会社の AI Operating System）を実装している。PORTERS を Source of Truth とし、その上に AI による進捗監視・求人マッチング・WEB 市場調査・新規開拓提案の層を載せる。詳細は [infralink/README.md](infralink/README.md) を参照。
+
 ## ステータス
 
 **設計フェーズ (2026-07)**: v0 設計ドキュメントを整備中。実装着手前レビューを想定。

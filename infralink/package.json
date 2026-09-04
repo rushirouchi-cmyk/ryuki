@@ -1,0 +1,49 @@
+{
+  "name": "infralink-talent-os",
+  "version": "0.1.0",
+  "private": true,
+  "description": "INFRALINK AI Talent Intelligence System",
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "prisma generate && next build",
+    "start": "next start -p 3000",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "db:push": "prisma db push",
+    "db:generate": "prisma generate",
+    "db:reset": "node scripts/reset-db.mjs && npm run seed",
+    "db:use-postgres": "node scripts/switch-datasource.mjs postgresql",
+    "db:use-sqlite": "node scripts/switch-datasource.mjs sqlite",
+    "seed": "tsx prisma/seed.ts",
+    "agents:run": "tsx scripts/run-agents.ts",
+    "sheets:sync": "tsx scripts/sync-sheets.ts",
+    "sheets:template": "tsx scripts/export-sheets-template.ts"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.5.0",
+    "bcryptjs": "^3.0.2",
+    "clsx": "^2.1.1",
+    "jose": "^6.0.10",
+    "next": "^15.2.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^22.13.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^15.5.25",
+    "postcss": "^8.5.3",
+    "prisma": "^6.5.0",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3"
+  }
+}

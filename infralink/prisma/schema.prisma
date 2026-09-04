@@ -1,0 +1,466 @@
+// INFRALINK AI Talent Intelligence System — データモデル
+//
+// 移植性の方針 (DECISIONS.md ADR-002):
+//   - Prisma enum / scalar list を使わない (SQLite と PostgreSQL の両方で動くため)
+//   - 列挙値は TypeScript 側 (src/lib/domain/enums.ts) の定数で表現し DB は String
+//   - 配列・構造化データは JSON 文字列として String に格納する
+//   - provider は scripts/switch-datasource.mjs で sqlite <-> postgresql を切替可能
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------- users / auth
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String // admin | executive | CA | RA
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  ownedCandidates    Candidate[]                    @relation("CandidateOwner")
+  actions            CandidateAction[]
+  alerts             AiAlert[]                      @relation("AlertCa")
+  interactions       AiInteraction[]
+  opportunities      BusinessDevelopmentOpportunity[] @relation("OpportunityOwner")
+  auditLogs          AuditLog[]
+
+  @@map("users")
+}
+
+// ------------------------------------------------------------------ candidates
+
+model Candidate {
+  id              String    @id @default(cuid())
+  portersId       String?   @unique
+  name            String
+  nameKana        String?
+  email           String?
+  phone           String?
+  age             Int?
+  location        String?
+  currentSalary   Int?
+  desiredSalary   Int?
+  jobChangeTiming String? // immediate | within_3m | within_6m | passive
+  ownerCaId       String?
+  source          String? // porters | sheets | manual | scout
+  status          String    @default("active") // active | on_hold | placed | closed
+  phase           String    @default("pre_interview") // §6 フェーズ
+  rank            String? // S | A | B | C — 支援優先度
+  lastContactDate DateTime?
+  nextAction      String?
+  nextActionDate  DateTime?
+  disclosureConsent Boolean @default(false) // §21 本人同意フラグ
+  aiSummary       String?
+  aiStructuredAt  DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  ownerCa        User?                     @relation("CandidateOwner", fields: [ownerCaId], references: [id])
+  careers        CandidateCareer[]
+  skills         CandidateSkill[]
+  qualifications CandidateQualification[]
+  preference     CandidatePreference?
+  actions        CandidateAction[]
+  applications   Application[]
+  matches        CandidateCompanyMatch[]
+  alerts         AiAlert[]
+  interactions   AiInteraction[]
+  scouts         ScoutRecord[]
+
+  @@index([ownerCaId])
+  @@index([phase])
+  @@index([nextActionDate])
+  @@map("candidates")
+}
+
+model CandidateCareer {
+  id              String    @id @default(cuid())
+  candidateId     String
+  companyName     String
+  industry        String?
+  jobCategory     String?
+  jobTitle        String?
+  startDate       DateTime?
+  endDate         DateTime?
+  yearsExperience Float?
+  isCurrent       Boolean   @default(false)
+  description     String?
+  managementCount Int?
+  projectScale    String?
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId])
+  @@map("candidate_careers")
+}
+
+model CandidateSkill {
+  id              String  @id @default(cuid())
+  candidateId     String
+  skillName       String
+  skillCategory   String? // technical | equipment | software | domain | management
+  skillLevel      Int? // 1..5
+  yearsExperience Float?
+  evidence        String? // 抽出根拠 (§37 説明可能性)
+  source          String  @default("ai") // ai | human
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@unique([candidateId, skillName])
+  @@index([skillName])
+  @@map("candidate_skills")
+}
+
+model CandidateQualification {
+  id                String    @id @default(cuid())
+  candidateId       String
+  qualificationName String
+  acquiredDate      DateTime?
+  source            String    @default("ai")
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@unique([candidateId, qualificationName])
+  @@index([qualificationName])
+  @@map("candidate_qualifications")
+}
+
+model CandidatePreference {
+  candidateId         String  @id
+  desiredLocations    String? // JSON string[]
+  desiredJobs         String? // JSON string[]
+  acceptableJobs      String? // JSON string[]
+  ngJobs              String? // JSON string[]
+  minimumSalary       Int?
+  desiredSalary       Int?
+  transferAllowed     String? // yes | no | negotiable | unknown
+  businessTripAllowed String?
+  nightShiftAllowed   String?
+  priority1           String?
+  priority2           String?
+  priority3           String?
+  note                String?
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@map("candidate_preferences")
+}
+
+model CandidateAction {
+  id             String    @id @default(cuid())
+  externalId     String?   @unique
+  candidateId    String
+  caId           String?
+  actionType     String // call | mail | meeting | job_proposal | recommend | interview_prep | follow_up | ai_check
+  actionDate     DateTime
+  memo           String?
+  nextAction     String?
+  nextActionDate DateTime?
+  actor          String    @default("human") // human | AI (§50)
+  createdAt      DateTime  @default(now())
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  ca        User?     @relation(fields: [caId], references: [id])
+
+  @@index([candidateId, actionDate])
+  @@map("candidate_actions")
+}
+
+// -------------------------------------------------------- companies / jobs
+
+model Company {
+  id                String   @id @default(cuid())
+  // データソース (PORTERS / Sheets) 側の一意 ID。同期時の突合キー。
+  externalId        String?  @unique
+  companyName       String
+  transactionStatus String   @default("unknown") // existing | prospect | unknown
+  industry          String?
+  location          String?
+  website           String?
+  relationshipStatus String? // none | approached | in_talks | contracted | declined
+  employeeCount     Int?
+  note              String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  jobs          Job[]
+  applications  Application[]
+  webFindings   WebJobFinding[]
+  matches       CandidateCompanyMatch[]
+  opportunities BusinessDevelopmentOpportunity[]
+
+  @@index([transactionStatus])
+  @@map("companies")
+}
+
+model Job {
+  id                 String   @id @default(cuid())
+  portersJobId       String?  @unique
+  companyId          String
+  jobTitle           String
+  jobCategory        String?
+  location           String?
+  salaryMin          Int?
+  salaryMax          Int?
+  requiredSkills     String? // JSON string[]
+  preferredSkills    String? // JSON string[]
+  requiredExperience String?
+  qualifications     String? // JSON string[]
+  description        String?
+  status             String   @default("open") // open | closed | on_hold
+  source             String   @default("porters") // porters | sheets | manual | web
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  company      Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  applications Application[]
+  matches      CandidateCompanyMatch[]
+  scouts       ScoutRecord[]
+
+  @@index([companyId])
+  @@index([status])
+  @@map("jobs")
+}
+
+model Application {
+  id                     String    @id @default(cuid())
+  externalId             String?   @unique
+  candidateId            String
+  jobId                  String?
+  companyId              String
+  applicationDate        DateTime
+  currentStage           String // proposed | applied | document_screening | interview_1 | interview_2 | final | offer | accepted | rejected | withdrawn
+  documentResult         String? // pass | fail | pending
+  interview1Result       String?
+  interview2Result       String?
+  finalResult            String?
+  offerStatus            String? // offered | declined | none
+  acceptanceStatus       String? // accepted | declined | pending
+  offerDeadline          DateTime?
+  rejectionReasonOriginal String? // §34 原文は絶対に消さない
+  rejectionReasonTag     String? // §34 AI が提案・人が確定
+  rejectionTagConfirmedBy String?
+  updatedStageAt         DateTime  @default(now())
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  job       Job?      @relation(fields: [jobId], references: [id])
+  company   Company   @relation(fields: [companyId], references: [id])
+
+  @@index([candidateId])
+  @@index([companyId])
+  @@index([currentStage])
+  @@map("applications")
+}
+
+// --------------------------------------------------- web research / matching
+
+model WebJobFinding {
+  id             String    @id @default(cuid())
+  companyId      String
+  jobTitle       String
+  sourceUrl      String
+  sourceType     String // official_career | official_news | job_board | agent_media | news | other
+  location       String?
+  requirements   String?
+  salary         String?
+  estimatedFit   Int? // 0..100 推定候補者適合度
+  foundAt        DateTime  @default(now())
+  lastVerifiedAt DateTime  @default(now()) // §14 鮮度
+  activeStatus   String    @default("active") // active | stale | closed
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([lastVerifiedAt])
+  @@map("web_job_findings")
+}
+
+model CandidateCompanyMatch {
+  id          String   @id @default(cuid())
+  candidateId String
+  companyId   String
+  jobId       String?
+  findingId   String?
+  matchType   String   @default("internal_job") // internal_job | web_company
+  matchScore  Int
+  breakdown   String? // JSON: {factor, weight, earned, note}[] (§37)
+  matchReason String? // JSON string[]
+  risk        String? // JSON string[]  懸念
+  missingInfo String? // JSON string[]  不足情報 (§38)
+  confidence  String   @default("Medium") // High | Medium | Low
+  createdAt   DateTime @default(now())
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  job       Job?      @relation(fields: [jobId], references: [id])
+
+  @@index([candidateId, matchScore])
+  @@index([companyId])
+  @@map("candidate_company_matches")
+}
+
+model BusinessDevelopmentOpportunity {
+  id                    String   @id @default(cuid())
+  companyId             String
+  score                 Int
+  breakdown             String? // JSON 内訳 (§18/§37)
+  matchingCandidateCount Int     @default(0)
+  sRankCount            Int      @default(0)
+  aRankCount            Int      @default(0)
+  hiringDemandScore     Int      @default(0)
+  reason                String?
+  recommendedAction     String?
+  approachAngle         String?
+  targetDepartment      String?
+  draftMessage          String? // §20 営業用簡易メッセージ (個人特定情報を含まない)
+  status                String   @default("not_started") // §29 営業進捗
+  ownerRaId             String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  ownerRa User?   @relation("OpportunityOwner", fields: [ownerRaId], references: [id])
+
+  @@index([score])
+  @@index([status])
+  @@map("business_development_opportunities")
+}
+
+// ------------------------------------------------------------ alerts / AI ops
+
+model AiAlert {
+  id                  String    @id @default(cuid())
+  candidateId         String?
+  caId                String?
+  alertLevel          Int // 1 注意 | 2 遅延 | 3 重大
+  alertType           String // §6 フェーズ別チェック種別
+  reason              String
+  detectedAt          DateTime  @default(now())
+  dueAt               DateTime?
+  firstNotificationAt DateTime?
+  secondNotificationAt DateTime?
+  escalatedAt         DateTime?
+  status              String    @default("open") // open | answered | resolved | escalated | dismissed
+  resolvedAt          DateTime?
+
+  candidate Candidate? @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  ca        User?     @relation("AlertCa", fields: [caId], references: [id])
+
+  @@index([status, alertLevel])
+  @@index([caId])
+  @@unique([candidateId, alertType, status])
+  @@map("ai_alerts")
+}
+
+model AiInteraction {
+  id               String   @id @default(cuid())
+  agentType        String // ca_supervisor | matching | market_research | business_development
+  candidateId      String?
+  userId           String?
+  alertId          String?
+  question         String?
+  response         String?
+  structuredResult String? // JSON
+  provider         String? // 使用した LLM プロバイダ
+  confidence       String?
+  createdAt        DateTime @default(now())
+
+  candidate Candidate? @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  user      User?     @relation(fields: [userId], references: [id])
+
+  @@index([agentType, createdAt])
+  @@map("ai_interactions")
+}
+
+// ------------------------------------------------------------- scout (§36)
+
+model ScoutRecord {
+  id           String    @id @default(cuid())
+  candidateId  String
+  jobId        String?
+  scoutSent    Boolean   @default(false)
+  scoutSentAt  DateTime?
+  scoutOpened  Boolean   @default(false)
+  scoutReplied Boolean   @default(false)
+  meetingBooked Boolean  @default(false)
+  applied      Boolean   @default(false)
+  media        String?
+  createdAt    DateTime  @default(now())
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  job       Job?      @relation(fields: [jobId], references: [id])
+
+  @@index([candidateId])
+  @@map("scout_records")
+}
+
+// ------------------------------------------------------- settings / audit
+
+model SystemSetting {
+  key       String   @id
+  value     String // JSON
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+
+  @@map("system_settings")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorType  String // human | AI | system (§50)
+  actorId    String?
+  actorLabel String?
+  entityType String
+  entityId   String
+  action     String // create | update | delete | notify | escalate
+  before     String? // JSON
+  after      String? // JSON
+  createdAt  DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model NotificationLog {
+  id        String   @id @default(cuid())
+  channel   String // email | slack | console
+  recipient String
+  subject   String
+  body      String
+  refType   String?
+  refId     String?
+  status    String   @default("sent") // sent | failed
+  error     String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("notification_logs")
+}
+
+model JobRunLog {
+  id         String    @id @default(cuid())
+  jobName    String
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  status     String    @default("running") // running | success | failed
+  summary    String?
+  error      String?
+
+  @@index([jobName, startedAt])
+  @@map("job_run_logs")
+}
